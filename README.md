@@ -8,6 +8,40 @@ SQL query results are formatted directly to avoid inventing data. The model may
 use up to 4,096 tokens for reasoning and output, so complex requests may take
 longer.
 
+## Workflow
+
+```mermaid
+flowchart TD
+    A["Start agent"] --> B["Load settings and active role"]
+    B --> C["Initialize SQLite database and seed data if empty"]
+    C --> D["User enters a message"]
+    D --> E["Qwen3.5:2b with thinking enabled"]
+    E --> F{"Classify intent"}
+
+    F -->|"general: greeting, casual chat, general knowledge"| G["Return conversational answer"]
+    G --> R["Display answer"]
+
+    F -->|"business_query: accessible business data"| H["Generate JSON: intent + SQL"]
+    F -->|"unavailable or unauthorized business facts"| N["Explain data cannot be confirmed; do not guess"]
+    N --> R
+
+    H --> I["SQLite read-only query tool"]
+    I --> J{"SQL and role permissions valid?"}
+    J -->|"No"| K["Return query or permission error"]
+    K --> R
+    J -->|"Yes"| L["Execute SELECT against SQLite"]
+    L --> M["Format up to 100 result rows"]
+    M --> S["Display answer and generated SQL"]
+
+    R --> D
+    S --> D
+```
+
+In short, **every message goes to the model first**. Only a message classified as
+an accessible business-data query reaches SQLite. General conversation is answered
+by the model directly, and the SQL tool enforces the active role's table
+permissions, read-only access, query timeout, and result limit.
+
 ## Requirements
 
 - Python 3.10+
