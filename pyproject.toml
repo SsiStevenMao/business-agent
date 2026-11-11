@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "business-agent"
+version = "0.1.0"
+description = "A local business data agent backed by SQLite and Ollama."
+requires-python = ">=3.10"
+dependencies = [
+    "ollama>=0.4,<1.0",
+    "python-dotenv>=1.0,<2.0",
+]
+
+[tool.setuptools.packages.find]
+include = ["business_agent*"]
