@@ -108,6 +108,16 @@ environment variables or `.env`.
 python -m business_agent
 ```
 
+To display a concise decision trace for every request (selected route and
+whether the database tool is called), run:
+
+```powershell
+python -m business_agent --show-reasoning
+```
+
+The trace explains observable decisions; it does not expose the model's private
+chain-of-thought.
+
 When using the Groq provider, the computer needs internet access and the API
 account's model limits and pricing apply. When using Ollama, make sure its
 service is running and the configured model is already installed.

@@ -11,7 +11,7 @@ from business_agent.roles import ROLES
 from business_agent.seed import seed_database
 
 
-def main() -> int:
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Local business data agent")
     parser.add_argument(
         "--role",
@@ -19,7 +19,19 @@ def main() -> int:
         default="sales_analyst",
         help="Select the agent role and its read permissions.",
     )
-    args = parser.parse_args()
+    parser.add_argument(
+        "--show-reasoning",
+        action="store_true",
+        help=(
+            "Show a concise decision trace (intent and tool usage), "
+            "not the model's private chain-of-thought."
+        ),
+    )
+    return parser
+
+
+def main() -> int:
+    args = build_parser().parse_args()
 
     settings = load_settings()
     initialize_database(settings.database_path)
@@ -61,6 +73,11 @@ def main() -> int:
             sql, answer = agent.answer(
                 question,
                 on_progress=partial(print, end="\n", flush=True),
+                on_trace=(
+                    partial(print, "[决策摘要]", flush=True)
+                    if args.show_reasoning
+                    else None
+                ),
             )
             elapsed = time.perf_counter() - started_at
         except (ModelProviderError, QueryError) as error:

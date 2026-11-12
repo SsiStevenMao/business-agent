@@ -276,6 +276,7 @@ class BusinessAgent:
         self,
         question: str,
         on_progress: Callable[[str], None] | None = None,
+        on_trace: Callable[[str], None] | None = None,
     ) -> tuple[str, str]:
         if not self._conversation_history and self._pending_question is None:
             clarification = self._sales_scope_clarification(question)
@@ -284,6 +285,10 @@ class BusinessAgent:
             if clarification is None:
                 clarification = self._unresolved_reference_clarification(question)
             if clarification is not None:
+                if on_trace is not None:
+                    on_trace(
+                        "预检判断：业务查询缺少必要信息；先请求澄清，不调用模型或数据库。"
+                    )
                 self._pending_question = self._truncate_history_value(
                     question, self._MAX_STORED_QUESTION_CHARS
                 )
@@ -350,6 +355,13 @@ class BusinessAgent:
         if on_progress is not None:
             on_progress("模型正在判断意图、必要时澄清并生成 SQL...")
         plan = self.model.route_request(routed_question, prompt)
+        if on_trace is not None:
+            if plan["intent"] == "general":
+                on_trace("路由判断：普通对话；直接回复，不调用数据库。")
+            elif plan["intent"] == "clarification":
+                on_trace("路由判断：业务请求信息不足；提出澄清，不调用数据库。")
+            else:
+                on_trace("路由判断：业务数据查询；准备执行只读 SQL。")
         if plan["intent"] in {"general", "clarification"}:
             if plan["sql"].strip():
                 raise ModelProviderError(
@@ -389,6 +401,10 @@ class BusinessAgent:
             self.role.allowed_tables,
             max_rows=self.role.max_rows,
         )
+        if on_trace is not None:
+            on_trace(
+                f"查询完成：返回 {len(rows)} 行（角色上限 {self.role.max_rows} 行）。"
+            )
         answer = self._format_rows(rows, self.role.max_rows)
         self._pending_question = None
         self._clarification_history = []

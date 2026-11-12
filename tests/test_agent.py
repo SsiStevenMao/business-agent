@@ -354,6 +354,49 @@ class AgentTests(unittest.TestCase):
         self.assertIn("我们正在讨论订单的查询方式。", second_request)
         self.assertIn("继续说", second_request)
 
+    def test_decision_trace_reports_general_route_without_database_access(self) -> None:
+        model = OllamaModel("http://localhost:11434", "test-model")
+        agent = BusinessAgent(self.database_path, model, ROLES["sales_analyst"])
+        trace: list[str] = []
+        with (
+            patch.object(
+                model,
+                "route_request",
+                return_value={
+                    "intent": "general",
+                    "sql": "",
+                    "answer": "你好！",
+                },
+            ),
+            patch("business_agent.agent.execute_read_query") as execute_read_query,
+        ):
+            agent.answer("你好", on_trace=trace.append)
+
+        self.assertEqual(len(trace), 1)
+        self.assertIn("普通对话", trace[0])
+        self.assertIn("不调用数据库", trace[0])
+        execute_read_query.assert_not_called()
+
+    def test_decision_trace_reports_business_route_and_query_result(self) -> None:
+        model = OllamaModel("http://localhost:11434", "test-model")
+        agent = BusinessAgent(self.database_path, model, ROLES["sales_analyst"])
+        trace: list[str] = []
+        with patch.object(
+            model,
+            "route_request",
+            return_value={
+                "intent": "business_query",
+                "sql": "SELECT COUNT(*) AS order_count FROM orders",
+                "answer": "",
+            },
+        ):
+            agent.answer("一共有多少订单？", on_trace=trace.append)
+
+        self.assertEqual(len(trace), 2)
+        self.assertIn("业务数据查询", trace[0])
+        self.assertIn("只读 SQL", trace[0])
+        self.assertIn("返回 1 行", trace[1])
+
     def test_conversation_memory_is_bounded_and_can_be_cleared(self) -> None:
         model = OllamaModel("http://localhost:11434", "test-model")
         agent = BusinessAgent(self.database_path, model, ROLES["sales_analyst"])
