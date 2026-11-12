@@ -77,7 +77,7 @@ class WebServerTests(unittest.TestCase):
             "/api/chat",
             {
                 "message": "Hello",
-                "role": "sales_analyst",
+                "role": "admin",
                 "show_trace": True,
             },
         )
@@ -85,6 +85,16 @@ class WebServerTests(unittest.TestCase):
         self.assertEqual(response["answer"], "Hello from the assistant.")
         self.assertGreaterEqual(response["elapsed_seconds"], 0)
         self.model.route_request.assert_called_once()
+
+    def test_chat_endpoint_blocks_general_questions_for_non_admin(self) -> None:
+        status, response = self._post(
+            "/api/chat",
+            {"message": "Hello", "role": "sales_analyst"},
+        )
+
+        self.assertEqual(status, 200)
+        self.assertIn("admin role", response["answer"])
+        self.model.route_request.assert_not_called()
 
     def test_chat_endpoint_rejects_empty_message_and_unknown_role(self) -> None:
         status, response = self._post(

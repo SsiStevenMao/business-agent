@@ -30,6 +30,95 @@ class BusinessAgent:
             return value
         return value[:max_chars] + "\n…（内容已截断）"
 
+    @staticmethod
+    def _looks_like_business_data_request(question: str) -> bool:
+        business_entity = (
+            r"订单|订单明细|订单行|客户|顾客|产品|商品|库存|销售|销量|销售额|营收|"
+            r"\border(?:s|line|lines)?\b|\bcustomer(?:s)?\b|\bclient(?:s)?\b|"
+            r"\bproduct(?:s)?\b|\binventory\b|\bstock\b|\bsales?\b|\brevenue\b|"
+            r"\bCUST-\d+\b|\bORD-\d+\b|\bSKU-\d+\b"
+        )
+        if not re.search(business_entity, question, re.IGNORECASE):
+            return False
+
+        content_creation = (
+            r"写|写一封|撰写|起草|生成.*(?:邮件|通知|模板|文案|报告模板)|"
+            r"\b(?:write|draft|compose|translate|rewrite)\b"
+        )
+        if re.search(content_creation, question, re.IGNORECASE):
+            return False
+
+        data_request = (
+            r"查|查询|查看|找|列出|返回|统计|分析|显示|多少|有哪些|"
+            r"是什么|什么是|状态|邮箱|地址|库存|订单|客户|产品|销售|营收|销量|"
+            r"\b(?:show|list|find|look up|query|search|get|return|count|how many|"
+            r"what is|what are|status|email|address|stock|inventory|sales|revenue)\b|"
+            r"\b(?:CUST-\d+|ORD-\d+|SKU-\d+)\b"
+        )
+        return bool(re.search(data_request, question, re.IGNORECASE))
+
+    @staticmethod
+    def _is_live_market_data_request(question: str) -> bool:
+        market_topic = (
+            r"每股|股价|股票行情|美股行情|股市行情|指数|纳指|道指|标普|道琼斯|涨跌|"
+            r"\bshare price\b|\bstock price\b|\bstock quote\b|\bticker\b|"
+            r"\bS&P\s*500\b|\bNASDAQ\b|\bDow Jones\b"
+        )
+        market_performance = (
+            r"股票|美股|股市|行情|走势|表现|涨跌|股价|每股|指数|"
+            r"\bstocks?\b|\bshares?\b|\bstock market\b|\bmarket performance\b|"
+            r"\bhow(?:'s| is| are)\b|\bperformance\b|\bprice\b|\bdoing\b"
+        )
+        return bool(
+            re.search(market_topic, question, re.IGNORECASE)
+            or (
+                re.search(market_performance, question, re.IGNORECASE)
+                and (
+                    re.search(
+                        r"怎么样|如何|表现|行情|走势|涨跌|股价|"
+                        r"\bhow\b|\bperformance\b|\bdoing\b|\bprice\b",
+                        question,
+                        re.IGNORECASE,
+                    )
+                    or re.search(
+                        r"今天|今日|现在|当前|最新|实时|近期|最近|"
+                        r"\btoday\b|\bnow\b|\bcurrent(?:ly)?\b|\blive\b|\blatest\b|"
+                        r"\brecent(?:ly)?\b",
+                        question,
+                        re.IGNORECASE,
+                    )
+                )
+            )
+        )
+
+    def _has_business_follow_up_context(self, question: str) -> bool:
+        if self._pending_question is not None:
+            return True
+        if not any(turn["sql"] for turn in self._conversation_history):
+            return False
+        follow_up = (
+            r"它|他们|他们的|他的|她的|这个|那个|还有呢|以及|"
+            r"\b(?:it|its|they|them|that|this|what about|and)\b|"
+            r"邮箱|地址|状态|金额|价格|数量|"
+            r"\b(?:email|address|status|amount|price|quantity)\b"
+        )
+        return bool(re.search(follow_up, question, re.IGNORECASE))
+
+    @staticmethod
+    def _is_chinese(question: str) -> bool:
+        return any("\u4e00" <= character <= "\u9fff" for character in question)
+
+    def _general_query_denial(self, question: str) -> str:
+        if self._is_chinese(question):
+            return (
+                "当前角色仅允许查询已授权的业务数据库，不支持通用问答。"
+                "如需使用通用问答，请切换到管理员角色。"
+            )
+        return (
+            "The current role only supports authorized business-data queries, "
+            "not general questions. Switch to the admin role to use general Q&A."
+        )
+
     def _remember_turn(self, question: str, answer: str, sql: str = "") -> None:
         self._conversation_history.append(
             {
@@ -296,6 +385,43 @@ class BusinessAgent:
                 self._remember_turn(question, clarification)
                 return "", clarification
 
+        if self._is_live_market_data_request(question):
+            if self.role.allow_general_queries:
+                if self._is_chinese(question):
+                    answer = (
+                        "我没有接入实时行情或外部金融数据源，无法确认今天的股价或市场表现。"
+                        "请查询可靠的实时行情来源。"
+                    )
+                else:
+                    answer = (
+                        "I don't have access to live market data, so I can't verify "
+                        "today's stock prices or market performance. Please check a "
+                        "reliable real-time financial data source."
+                    )
+            else:
+                answer = self._general_query_denial(question)
+            if on_trace is not None:
+                on_trace("角色/数据源限制：不调用模型或数据库。")
+            self._pending_question = None
+            self._clarification_history = []
+            self._remember_turn(question, answer)
+            return "", answer
+
+        is_business_request = self._looks_like_business_data_request(question)
+        is_business_follow_up = self._has_business_follow_up_context(question)
+        if (
+            not self.role.allow_general_queries
+            and not is_business_request
+            and not is_business_follow_up
+        ):
+            answer = self._general_query_denial(question)
+            if on_trace is not None:
+                on_trace("角色权限：通用问答仅对管理员开放；未调用模型或数据库。")
+            self._pending_question = None
+            self._clarification_history = []
+            self._remember_turn(question, answer)
+            return "", answer
+
         if on_progress is not None:
             on_progress("模型正在判断问题类型...")
         prompt = (
@@ -339,6 +465,14 @@ class BusinessAgent:
             "条数时不添加固定 LIMIT，查询工具会按上限截断。当前角色单次最多返回 "
             f"{self.role.max_rows} 行。\n"
             "只能使用列出的表和字段。SQL 必须是只读 SELECT。\n"
+            "通用问答权限："
+            + (
+                "当前角色允许通用问答。"
+                if self.role.allow_general_queries
+                else "当前角色禁止通用问答；如果用户请求不是查询授权业务数据，"
+                "按 general 分类且不要尝试回答问题内容。"
+            )
+            + "\n"
             "决策示例：\n"
             "用户“你好” -> general；用户“写一封订单延迟邮件” -> general；"
             "用户“给我返回所有订单” -> business_query，不添加 LIMIT；"
@@ -357,7 +491,10 @@ class BusinessAgent:
         plan = self.model.route_request(routed_question, prompt)
         if on_trace is not None:
             if plan["intent"] == "general":
-                on_trace("路由判断：普通对话；直接回复，不调用数据库。")
+                if not self.role.allow_general_queries:
+                    on_trace("角色权限：通用问答仅对管理员开放；不调用数据库。")
+                else:
+                    on_trace("路由判断：普通对话；直接回复，不调用数据库。")
             elif plan["intent"] == "clarification":
                 on_trace("路由判断：业务请求信息不足；提出澄清，不调用数据库。")
             else:
@@ -373,6 +510,12 @@ class BusinessAgent:
                     f"The model classified the request as {plan['intent']} "
                     "but returned no answer."
                 )
+            if plan["intent"] == "general" and not self.role.allow_general_queries:
+                answer = self._general_query_denial(question)
+                self._pending_question = None
+                self._clarification_history = []
+                self._remember_turn(question, answer)
+                return "", answer
             if plan["intent"] == "clarification":
                 if self._pending_question is None:
                     self._pending_question = self._truncate_history_value(

@@ -3,7 +3,7 @@
 A natural-language business agent with interchangeable language-model
 providers. The default provider is Groq via its OpenAI-compatible API; Ollama
 with `qwen3.5:2b` is also available. Both providers use the same intent-routing
-interface: the model answers general questions directly or proposes a
+interface: the model answers general questions for the admin role or proposes a
 read-only SQL query for accessible business data. Python enforces SQLite role
 permissions and formats query results.
 
@@ -14,7 +14,10 @@ flowchart TD
     A["Start agent"] --> B["Load provider, model, key, and active role"]
     B --> C["Initialize SQLite database and seed data if empty"]
     C --> D["User enters a message"]
-    D --> P{"Known business query missing required details?"}
+    D --> GATE{"Non-admin general question?"}
+    GATE -->|"Yes"| X["Reject locally; no model call"]
+    X --> R["Display answer"]
+    GATE -->|"No"| P{"Known business query missing required details?"}
     P -->|"Yes"| Q["Ask a targeted clarification; do not query"]
     Q --> R["Display answer"]
     P -->|"No"| E["Selected model provider"]
@@ -51,8 +54,12 @@ clarification, and business-data lookup. Mentioning an order in a writing reques
 does not by itself trigger a database query. The agent retains an unanswered
 clarification in the current chat so the user's next message can complete it; a
 new independent request is handled separately. General conversation is answered
-by the model directly, and the SQL tool enforces the active role's table
-permissions, read-only access, query timeout, and result limit.
+by the model directly only for the `admin` role. Other roles are restricted to
+authorized business-data requests; unrelated questions are rejected locally
+without calling the model. The SQL tool enforces the active role's table
+permissions, read-only access, query timeout, and result limit. No role has a
+live financial-market data source, so questions about current stock prices or
+market performance receive a fixed notice rather than a model-generated guess.
 The agent also sends the recent conversation (user messages, assistant replies,
 and SQL used) with each model request, so follow-ups can refer to previous
 answers. In-memory history is bounded to the latest eight exchanges and is
@@ -152,7 +159,7 @@ Roles:
 - `sales_analyst`: internal sales staff; all business tables; maximum 1,000
   result rows per query.
 - `admin`: read-only access to all business tables; maximum 1,000 result rows
-  per query.
+  per query; the only role allowed to use general Q&A.
 
 Every role is read-only. SQLite authorizer checks table access as queries execute,
 and the query tool enforces each role's row cap (never greater than 1,000). A

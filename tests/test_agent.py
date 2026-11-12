@@ -94,7 +94,57 @@ class AgentTests(unittest.TestCase):
 
         self.assertEqual(answer, "没有查到匹配的数据。")
 
-    def test_greeting_is_answered_by_model_without_querying_database(self) -> None:
+    def test_non_admin_greeting_is_rejected_without_calling_model(self) -> None:
+        model = OllamaModel("http://localhost:11434", "test-model")
+        agent = BusinessAgent(self.database_path, model, ROLES["customer_support"])
+
+        with patch.object(model, "route_request") as route_request:
+            sql, answer = agent.answer("你好")
+
+        self.assertEqual(sql, "")
+        self.assertIn("管理员", answer)
+        route_request.assert_not_called()
+
+    def test_admin_can_answer_general_questions(self) -> None:
+        model = OllamaModel("http://localhost:11434", "test-model")
+        agent = BusinessAgent(self.database_path, model, ROLES["admin"])
+
+        with patch.object(
+            model,
+            "route_request",
+            return_value={
+                "intent": "general",
+                "sql": "",
+                "answer": "你好！",
+            },
+        ) as route_request:
+            sql, answer = agent.answer("你好")
+
+        self.assertEqual(sql, "")
+        self.assertEqual(answer, "你好！")
+        route_request.assert_called_once()
+
+    def test_non_admin_business_query_still_calls_model(self) -> None:
+        model = OllamaModel("http://localhost:11434", "test-model")
+        agent = BusinessAgent(self.database_path, model, ROLES["customer_support"])
+        sql_query = "SELECT first_name FROM customers LIMIT 1"
+
+        with patch.object(
+            model,
+            "route_request",
+            return_value={
+                "intent": "business_query",
+                "sql": sql_query,
+                "answer": "",
+            },
+        ) as route_request:
+            sql, answer = agent.answer("Show one customer")
+
+        self.assertEqual(sql, sql_query)
+        self.assertIn("查询结果", answer)
+        route_request.assert_called_once()
+
+    def test_non_admin_cannot_return_general_answer_for_business_looking_question(self) -> None:
         model = OllamaModel("http://localhost:11434", "test-model")
         agent = BusinessAgent(self.database_path, model, ROLES["customer_support"])
 
@@ -104,18 +154,51 @@ class AgentTests(unittest.TestCase):
             return_value={
                 "intent": "general",
                 "sql": "",
-                "answer": "你好！我可以帮你查询订单、客户和产品信息。",
+                "answer": "There are 50 customers.",
             },
         ) as route_request:
-            sql, answer = agent.answer("你好")
+            sql, answer = agent.answer("How many customers are in the database?")
 
         self.assertEqual(sql, "")
-        self.assertIn("你好", answer)
+        self.assertIn("admin role", answer)
         route_request.assert_called_once()
+
+    def test_admin_live_market_question_does_not_invent_current_data(self) -> None:
+        model = OllamaModel("http://localhost:11434", "test-model")
+        agent = BusinessAgent(self.database_path, model, ROLES["admin"])
+
+        with patch.object(model, "route_request") as route_request:
+            sql, answer = agent.answer("今天每股怎么样？")
+
+        self.assertEqual(sql, "")
+        self.assertIn("没有接入实时行情", answer)
+        route_request.assert_not_called()
+
+    def test_admin_market_performance_question_without_time_is_not_sent_to_model(self) -> None:
+        model = OllamaModel("http://localhost:11434", "test-model")
+        agent = BusinessAgent(self.database_path, model, ROLES["admin"])
+
+        with patch.object(model, "route_request") as route_request:
+            sql, answer = agent.answer("美股表现怎么样？")
+
+        self.assertEqual(sql, "")
+        self.assertIn("没有接入实时行情", answer)
+        route_request.assert_not_called()
+
+    def test_non_admin_live_market_question_is_rejected_without_model_call(self) -> None:
+        model = OllamaModel("http://localhost:11434", "test-model")
+        agent = BusinessAgent(self.database_path, model, ROLES["sales_analyst"])
+
+        with patch.object(model, "route_request") as route_request:
+            sql, answer = agent.answer("今天每股怎么样？")
+
+        self.assertEqual(sql, "")
+        self.assertIn("管理员", answer)
+        route_request.assert_not_called()
 
     def test_ambiguous_recent_query_asks_for_target_and_time_range(self) -> None:
         model = OllamaModel("http://localhost:11434", "test-model")
-        agent = BusinessAgent(self.database_path, model, ROLES["sales_analyst"])
+        agent = BusinessAgent(self.database_path, model, ROLES["admin"])
 
         with (
             patch.object(model, "route_request") as route_request,
@@ -132,7 +215,7 @@ class AgentTests(unittest.TestCase):
 
     def test_recent_orders_query_clarifies_missing_time_range(self) -> None:
         model = OllamaModel("http://localhost:11434", "test-model")
-        agent = BusinessAgent(self.database_path, model, ROLES["sales_analyst"])
+        agent = BusinessAgent(self.database_path, model, ROLES["admin"])
 
         with (
             patch.object(model, "route_request") as route_request,
@@ -148,7 +231,7 @@ class AgentTests(unittest.TestCase):
 
     def test_sales_performance_clarifies_missing_metric_and_time_range(self) -> None:
         model = OllamaModel("http://localhost:11434", "test-model")
-        agent = BusinessAgent(self.database_path, model, ROLES["sales_analyst"])
+        agent = BusinessAgent(self.database_path, model, ROLES["admin"])
 
         with (
             patch.object(model, "route_request") as route_request,
@@ -197,7 +280,7 @@ class AgentTests(unittest.TestCase):
 
     def test_business_terms_in_writing_request_are_not_preemptively_queried(self) -> None:
         model = OllamaModel("http://localhost:11434", "test-model")
-        agent = BusinessAgent(self.database_path, model, ROLES["sales_analyst"])
+        agent = BusinessAgent(self.database_path, model, ROLES["admin"])
 
         with (
             patch.object(
@@ -263,7 +346,7 @@ class AgentTests(unittest.TestCase):
 
     def test_follow_up_receives_prior_questions_answers_and_sql(self) -> None:
         model = OllamaModel("http://localhost:11434", "test-model")
-        agent = BusinessAgent(self.database_path, model, ROLES["customer_support"])
+        agent = BusinessAgent(self.database_path, model, ROLES["admin"])
         plans = [
             {
                 "intent": "business_query",
@@ -331,7 +414,7 @@ class AgentTests(unittest.TestCase):
 
     def test_general_follow_up_receives_previous_exchange(self) -> None:
         model = OllamaModel("http://localhost:11434", "test-model")
-        agent = BusinessAgent(self.database_path, model, ROLES["sales_analyst"])
+        agent = BusinessAgent(self.database_path, model, ROLES["admin"])
         plans = [
             {
                 "intent": "general",
@@ -356,7 +439,7 @@ class AgentTests(unittest.TestCase):
 
     def test_decision_trace_reports_general_route_without_database_access(self) -> None:
         model = OllamaModel("http://localhost:11434", "test-model")
-        agent = BusinessAgent(self.database_path, model, ROLES["sales_analyst"])
+        agent = BusinessAgent(self.database_path, model, ROLES["admin"])
         trace: list[str] = []
         with (
             patch.object(
@@ -438,7 +521,7 @@ class AgentTests(unittest.TestCase):
 
     def test_out_of_scope_question_is_handled_as_general_without_sql(self) -> None:
         model = OllamaModel("http://localhost:11434", "test-model")
-        agent = BusinessAgent(self.database_path, model, ROLES["customer_support"])
+        agent = BusinessAgent(self.database_path, model, ROLES["admin"])
 
         with patch.object(
             model,
@@ -472,7 +555,7 @@ class AgentTests(unittest.TestCase):
                 "answer": "",
             },
         ):
-            _, answer = agent.answer("Return 1200 rows")
+            _, answer = agent.answer("Return 1200 rows from orders")
 
         result_rows = [
             line for line in answer.splitlines() if line.startswith("| ")
@@ -499,7 +582,7 @@ class AgentTests(unittest.TestCase):
                 "answer": "",
             },
         ):
-            _, answer = agent.answer("Return 1200 rows")
+            _, answer = agent.answer("Return 1200 rows from orders")
 
         result_rows = [
             line for line in answer.splitlines() if line.startswith("| ")

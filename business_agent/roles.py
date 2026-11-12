@@ -8,6 +8,7 @@ class Role:
     description: str
     allowed_tables: frozenset[str]
     max_rows: int = 100
+    allow_general_queries: bool = False
 
 
 ROLES = {
@@ -40,6 +41,7 @@ ROLES = {
             description="Read and report on all business data.",
             allowed_tables=frozenset({"customers", "orders", "products", "items"}),
             max_rows=1000,
+            allow_general_queries=True,
         ),
     )
 }
