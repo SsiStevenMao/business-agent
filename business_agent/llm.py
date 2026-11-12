@@ -41,7 +41,12 @@ def parse_route_response(content: str | None) -> dict[str, str]:
         raise ModelProviderError("The model returned an invalid JSON route.") from error
     if not isinstance(result, dict) or not isinstance(result.get("sql"), str):
         raise ModelProviderError("The model response did not contain a valid route.")
-    if result.get("intent") not in {"business_query", "clarification", "general"}:
+    intent = result.get("intent")
+    if not isinstance(intent, str) or intent not in {
+        "business_query",
+        "clarification",
+        "general",
+    }:
         raise ModelProviderError("The model returned an unsupported request intent.")
     if not isinstance(result.get("answer"), str):
         raise ModelProviderError("The model response did not contain a text answer.")

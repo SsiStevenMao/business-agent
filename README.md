@@ -14,7 +14,7 @@ flowchart TD
     A["Start agent"] --> B["Load provider, model, key, and active role"]
     B --> C["Initialize SQLite database and seed data if empty"]
     C --> D["User enters a message"]
-    D --> P{"Known recent term missing target or time range?"}
+    D --> P{"Known business query missing required details?"}
     P -->|"Yes"| Q["Ask a targeted clarification; do not query"]
     Q --> R["Display answer"]
     P -->|"No"| E["Selected model provider"]
@@ -43,14 +43,20 @@ flowchart TD
 ```
 
 Only a message classified as an accessible business-data query reaches SQLite.
-The agent catches common “recent” requests that lack a business target or time
-range before calling the model, and asks a focused question without running SQL;
-for example, “查一下最近的” requires both a business target and a time range.
-Other unclear requests are handled by the model's clarification intent. The agent
-retains an unanswered clarification in the current chat so the user's next message
-can complete it; a new independent request is handled separately. General
-conversation is answered by the model directly, and the SQL tool enforces the
-active role's table permissions, read-only access, query timeout, and result limit.
+The agent catches common business requests that lack key details (such as a
+recent time range, a sales metric, or an identifiable referenced record) before
+calling the model, and asks a focused question without running SQL. The model
+handles other cases using explicit rules distinguishing general conversation,
+clarification, and business-data lookup. Mentioning an order in a writing request
+does not by itself trigger a database query. The agent retains an unanswered
+clarification in the current chat so the user's next message can complete it; a
+new independent request is handled separately. General conversation is answered
+by the model directly, and the SQL tool enforces the active role's table
+permissions, read-only access, query timeout, and result limit.
+The agent also sends the recent conversation (user messages, assistant replies,
+and SQL used) with each model request, so follow-ups can refer to previous
+answers. In-memory history is bounded to the latest eight exchanges and is
+cleared when the process exits; type `/clear` in the CLI to clear it sooner.
 
 ## Requirements
 
@@ -143,8 +149,9 @@ python -m unittest discover -s tests -v
 
 ## Golden-question evaluation
 
-`evaluation/golden_questions.json` contains fixed natural-language questions,
-the expected intent, and a golden SQL answer for business questions. The
+`evaluation/golden_questions.json` contains fixed natural-language questions
+covering direct answers, follow-up clarification, and business-data lookup,
+alongside the expected intent and golden SQL answer where applicable. The
 expected answer values are checked against the seeded data in the unit tests.
 To evaluate the configured model's intent routing and generated SQL against
 those answers, run:

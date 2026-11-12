@@ -99,5 +99,29 @@
     "question": "查一下最近的订单",
     "role": "sales_analyst",
     "expected_intent": "clarification"
+  },
+  {
+    "id": "sales-performance-missing-metric-and-range",
+    "question": "查销售表现",
+    "role": "sales_analyst",
+    "expected_intent": "clarification"
+  },
+  {
+    "id": "unresolved-order-reference",
+    "question": "查这个订单的状态",
+    "role": "sales_analyst",
+    "expected_intent": "clarification"
+  },
+  {
+    "id": "business-term-in-writing-request",
+    "question": "帮我写一封订单延迟通知邮件",
+    "role": "sales_analyst",
+    "expected_intent": "general"
+  },
+  {
+    "id": "non-business-latest-request",
+    "question": "Show me the latest space news",
+    "role": "sales_analyst",
+    "expected_intent": "general"
   }
 ]

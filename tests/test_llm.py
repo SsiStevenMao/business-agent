@@ -70,6 +70,8 @@ class ModelProviderTests(unittest.TestCase):
         self.assertEqual(clarification["intent"], "clarification")
         with self.assertRaisesRegex(ModelProviderError, "unsupported request intent"):
             parse_route_response('{"intent":"other","sql":"","answer":""}')
+        with self.assertRaisesRegex(ModelProviderError, "unsupported request intent"):
+            parse_route_response('{"intent":[],"sql":"","answer":""}')
 
     def test_groq_adapter_sends_structured_request(self) -> None:
         model = GroqModel("test-key", "openai/gpt-oss-20b")

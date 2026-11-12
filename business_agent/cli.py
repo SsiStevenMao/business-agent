@@ -39,7 +39,8 @@ def main() -> int:
     print(
         f"Business Agent | role: {role.name} | "
         f"model: {settings.groq_model if settings.model_provider == 'groq' else settings.ollama_model}\n"
-        "Ask about orders, customers, or products. Type 'exit' to quit."
+        "Ask about orders, customers, or products. Type '/clear' to clear chat memory; "
+        "type 'exit' to quit."
     )
     while True:
         try:
@@ -49,6 +50,10 @@ def main() -> int:
             return 0
         if question.lower() in {"exit", "quit"}:
             return 0
+        if question.lower() == "/clear":
+            agent.clear_conversation()
+            print("对话记忆已清除。")
+            continue
         if not question:
             continue
         try:
