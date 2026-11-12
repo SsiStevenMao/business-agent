@@ -89,6 +89,8 @@ COLUMN_DESCRIPTIONS = {
     "items": "id, order_id, product_id, quantity, unit_price, discount_amount",
 }
 
+MAX_QUERY_ROWS = 1000
+
 
 class QueryError(ValueError):
     """Raised when a generated SQL query is invalid or not permitted."""
@@ -130,6 +132,8 @@ def execute_read_query(
 ) -> list[dict[str, Any]]:
     if not sql or len(sql) > 8000 or "\x00" in sql:
         raise QueryError("SQL is empty or exceeds the 8000-character limit.")
+    if not 1 <= max_rows <= MAX_QUERY_ROWS:
+        raise QueryError(f"max_rows must be between 1 and {MAX_QUERY_ROWS}.")
 
     connection = sqlite3.connect(path, timeout=2)
     connection.row_factory = sqlite3.Row

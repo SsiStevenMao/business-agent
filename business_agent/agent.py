@@ -30,7 +30,11 @@ class BusinessAgent:
             "数据库中没有或当前角色无权访问的业务事实，明确说明无法从当前可访问的数据"
             "中确认，不要猜测或编造。\n"
             "不要把问候或一般问题转换成 SQL。业务查询只选择用户要求的字段；仅在需要"
-            "跨表数据时 JOIN。用户指定条数时必须遵守 LIMIT；未指定时明细列表最多 50 行。"
+            "跨表数据时 JOIN。用户明确指定条数时才添加对应的 LIMIT，且不得超过当前角色"
+            "的行数上限；用户询问“所有”“全部”或完整列表时，不要添加 LIMIT，查询工具会"
+            "按当前角色的行数上限截断结果。未指定条数时也不要自行使用固定的 LIMIT。"
+            "当前角色单次查询最多返回 "
+            f"{self.role.max_rows} 行。\n"
             "只能使用列出的表和字段。SQL 必须是只读 SELECT。\n"
             "示例：用户说“你好”时，intent=general，sql 为空，answer 为简短问候；"
             "用户说“查询前3个客户的名字和邮箱”时，intent=business_query，SQL 为 "
@@ -59,11 +63,12 @@ class BusinessAgent:
             self.database_path,
             sql,
             self.role.allowed_tables,
+            max_rows=self.role.max_rows,
         )
-        return sql, self._format_rows(rows)
+        return sql, self._format_rows(rows, self.role.max_rows)
 
     @staticmethod
-    def _format_rows(rows: list[dict[str, Any]]) -> str:
+    def _format_rows(rows: list[dict[str, Any]], max_rows: int = 100) -> str:
         if not rows:
             return "没有查到匹配的数据。"
 
@@ -83,4 +88,7 @@ class BusinessAgent:
             "| " + " | ".join(cell(row.get(column)) for column in columns) + " |"
             for row in rows
         ]
-        return "查询结果（最多显示 100 行）：\n" + "\n".join([header, separator, *body])
+        return (
+            f"查询结果（本角色最多显示 {max_rows} 行）：\n"
+            + "\n".join([header, separator, *body])
+        )

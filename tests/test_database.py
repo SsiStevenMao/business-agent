@@ -60,6 +60,15 @@ class DatabaseTests(unittest.TestCase):
         )
         self.assertEqual(len(rows), 5)
 
+    def test_query_row_limit_cannot_exceed_1000(self) -> None:
+        with self.assertRaisesRegex(QueryError, "between 1 and 1000"):
+            execute_read_query(
+                self.database_path,
+                "SELECT 1",
+                frozenset(),
+                max_rows=1001,
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

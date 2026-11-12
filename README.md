@@ -106,16 +106,23 @@ python -m business_agent --role admin
 
 Roles:
 
-- `customer_support`: customers, orders, and order items.
-- `inventory_manager`: products, order items, and order status.
-- `sales_analyst`: all business tables.
-- `admin`: read-only access to all business tables.
+- `customer_support`: internal customer-service staff; customers, orders, and
+  order items; maximum 1,000 result rows per query.
+- `inventory_manager`: internal inventory staff; products, order items, and
+  order status; maximum 1,000 result rows per query.
+- `sales_analyst`: internal sales staff; all business tables; maximum 1,000
+  result rows per query.
+- `admin`: read-only access to all business tables; maximum 1,000 result rows
+  per query.
 
 Every role is read-only. SQLite authorizer checks table access as queries execute,
-and results are capped at 100 rows. The model receives the permitted schema and
-relationship descriptions with every question. The CLI reports elapsed time for
-each request, which can be used to compare providers. Type `exit` to leave the
-chat.
+and the query tool enforces each role's row cap (never greater than 1,000). A
+new role defaults to a 100-row cap; internal roles explicitly opt into 1,000.
+There is currently no customer-facing role. Before adding one, implement
+customer-specific row-level access so one customer cannot read another
+customer's records. The model receives the permitted schema and relationship
+descriptions with every question. The CLI reports elapsed time for each request,
+which can be used to compare providers. Type `exit` to leave the chat.
 
 ## Tests
 
