@@ -112,6 +112,80 @@ class AgentTests(unittest.TestCase):
         self.assertIn("你好", answer)
         route_request.assert_called_once()
 
+    def test_ambiguous_recent_query_asks_for_target_and_time_range(self) -> None:
+        model = OllamaModel("http://localhost:11434", "test-model")
+        agent = BusinessAgent(self.database_path, model, ROLES["sales_analyst"])
+
+        with (
+            patch.object(model, "route_request") as route_request,
+            patch("business_agent.agent.execute_read_query") as execute_read_query,
+        ):
+            sql, answer = agent.answer("查一下最近的")
+
+        self.assertEqual(sql, "")
+        self.assertIn("订单", answer)
+        self.assertIn("产品", answer)
+        self.assertIn("时间范围", answer)
+        execute_read_query.assert_not_called()
+        route_request.assert_not_called()
+
+    def test_recent_orders_query_clarifies_missing_time_range(self) -> None:
+        model = OllamaModel("http://localhost:11434", "test-model")
+        agent = BusinessAgent(self.database_path, model, ROLES["sales_analyst"])
+
+        with (
+            patch.object(model, "route_request") as route_request,
+            patch("business_agent.agent.execute_read_query") as execute_read_query,
+        ):
+            sql, answer = agent.answer("查一下最近的订单")
+
+        self.assertEqual(sql, "")
+        self.assertIn("时间范围", answer)
+        self.assertNotIn("哪类业务数据", answer)
+        execute_read_query.assert_not_called()
+        route_request.assert_not_called()
+
+    def test_clarification_follow_up_uses_context_then_runs_query(self) -> None:
+        model = OllamaModel("http://localhost:11434", "test-model")
+        agent = BusinessAgent(self.database_path, model, ROLES["sales_analyst"])
+        plan = {
+            "intent": "business_query",
+            "sql": "SELECT order_number FROM orders",
+            "answer": "",
+        }
+
+        with patch.object(model, "route_request", return_value=plan) as route_request:
+            first_sql, first_answer = agent.answer("查一下最近的")
+            second_sql, second_answer = agent.answer("订单，最近 7 天")
+
+        self.assertEqual(first_sql, "")
+        self.assertIn("时间范围", first_answer)
+        self.assertEqual(second_sql, "SELECT order_number FROM orders")
+        self.assertIn("查询结果", second_answer)
+        follow_up = route_request.call_args.args[0]
+        self.assertIn("待澄清的原始请求：查一下最近的", follow_up)
+        self.assertIn("助手追问：", follow_up)
+        self.assertIn("用户最新消息：订单，最近 7 天", follow_up)
+        self.assertIsNone(agent._pending_question)
+        route_request.assert_called_once()
+
+    def test_explicit_recent_time_range_is_not_blocked_by_clarification_guard(self) -> None:
+        model = OllamaModel("http://localhost:11434", "test-model")
+        agent = BusinessAgent(self.database_path, model, ROLES["sales_analyst"])
+        with patch.object(
+            model,
+            "route_request",
+            return_value={
+                "intent": "business_query",
+                "sql": "SELECT order_number FROM orders LIMIT 1",
+                "answer": "",
+            },
+        ) as route_request:
+            sql, _ = agent.answer("查询最近 7 天的订单")
+
+        self.assertEqual(sql, "SELECT order_number FROM orders LIMIT 1")
+        route_request.assert_called_once()
+
     def test_out_of_scope_question_is_handled_as_general_without_sql(self) -> None:
         model = OllamaModel("http://localhost:11434", "test-model")
         agent = BusinessAgent(self.database_path, model, ROLES["customer_support"])

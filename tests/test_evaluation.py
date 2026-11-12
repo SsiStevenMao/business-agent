@@ -26,6 +26,9 @@ class GoldenQuestionTests(unittest.TestCase):
                 if case.expected_intent == "general":
                     self.assertIsNone(case.expected_sql)
                     continue
+                if case.expected_intent == "clarification":
+                    self.assertIsNone(case.expected_sql)
+                    continue
 
                 self.assertIsNotNone(case.expected_sql)
                 role = ROLES[case.role]
@@ -69,6 +72,30 @@ class GoldenQuestionTests(unittest.TestCase):
 
         self.assertIsNotNone(failure)
         self.assertIn("query result differs", failure)
+
+    def test_evaluator_accepts_clarification_without_running_sql(self) -> None:
+        case = next(
+            question
+            for question in load_golden_questions()
+            if question.id == "ambiguous-recent-query"
+        )
+        model = OllamaModel("http://localhost:11434", "test-model")
+        with (
+            patch.object(
+                model,
+                "route_request",
+                return_value={
+                    "intent": "clarification",
+                    "sql": "",
+                    "answer": "你想查询订单、产品还是其他业务数据？时间范围是什么？",
+                },
+            ),
+            patch("business_agent.agent.execute_read_query") as execute_read_query,
+        ):
+            failure = _evaluate_question(case, self.database_path, model)
+
+        self.assertIsNone(failure)
+        execute_read_query.assert_not_called()
 
 
 if __name__ == "__main__":

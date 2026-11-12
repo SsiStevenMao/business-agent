@@ -87,5 +87,17 @@
     "question": "你好",
     "role": "sales_analyst",
     "expected_intent": "general"
+  },
+  {
+    "id": "ambiguous-recent-query",
+    "question": "查一下最近的",
+    "role": "sales_analyst",
+    "expected_intent": "clarification"
+  },
+  {
+    "id": "recent-orders-missing-time-range",
+    "question": "查一下最近的订单",
+    "role": "sales_analyst",
+    "expected_intent": "clarification"
   }
 ]

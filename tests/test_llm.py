@@ -64,6 +64,10 @@ class ModelProviderTests(unittest.TestCase):
             '{"intent":"general","sql":"","answer":"Hello"}'
         )
         self.assertEqual(result["intent"], "general")
+        clarification = parse_route_response(
+            '{"intent":"clarification","sql":"","answer":"Which date range?"}'
+        )
+        self.assertEqual(clarification["intent"], "clarification")
         with self.assertRaisesRegex(ModelProviderError, "unsupported request intent"):
             parse_route_response('{"intent":"other","sql":"","answer":""}')
 

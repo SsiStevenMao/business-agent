@@ -65,11 +65,17 @@ def _evaluate_question(
     role = ROLES[case.role]
     agent = BusinessAgent(database_path, model, role)
     sql, answer = agent.answer(case.question)
+    if not answer.strip():
+        return "agent returned an empty answer"
+    if case.expected_intent == "clarification":
+        if sql:
+            return f"expected clarification without SQL, got SQL: {sql}"
+        if not answer.rstrip().endswith(("?", "？")):
+            return f"expected a clarifying question, got: {answer}"
+        return None
     actual_intent = "business_query" if sql else "general"
     if actual_intent != case.expected_intent:
         return f"expected intent {case.expected_intent!r}, got {actual_intent!r}"
-    if not answer.strip():
-        return "agent returned an empty answer"
     if case.expected_intent == "general":
         return None
     if case.expected_sql is None:

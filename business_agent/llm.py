@@ -10,7 +10,10 @@ from business_agent.config import Settings
 SQL_RESPONSE_FORMAT = {
     "type": "object",
     "properties": {
-        "intent": {"type": "string", "enum": ["business_query", "general"]},
+        "intent": {
+            "type": "string",
+            "enum": ["business_query", "clarification", "general"],
+        },
         "sql": {"type": "string"},
         "answer": {"type": "string"},
     },
@@ -38,7 +41,7 @@ def parse_route_response(content: str | None) -> dict[str, str]:
         raise ModelProviderError("The model returned an invalid JSON route.") from error
     if not isinstance(result, dict) or not isinstance(result.get("sql"), str):
         raise ModelProviderError("The model response did not contain a valid route.")
-    if result.get("intent") not in {"business_query", "general"}:
+    if result.get("intent") not in {"business_query", "clarification", "general"}:
         raise ModelProviderError("The model returned an unsupported request intent.")
     if not isinstance(result.get("answer"), str):
         raise ModelProviderError("The model response did not contain a text answer.")

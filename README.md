@@ -14,8 +14,14 @@ flowchart TD
     A["Start agent"] --> B["Load provider, model, key, and active role"]
     B --> C["Initialize SQLite database and seed data if empty"]
     C --> D["User enters a message"]
-    D --> E["Selected model provider"]
+    D --> P{"Known recent term missing target or time range?"}
+    P -->|"Yes"| Q["Ask a targeted clarification; do not query"]
+    Q --> R["Display answer"]
+    P -->|"No"| E["Selected model provider"]
     E --> F{"Classify intent"}
+
+    F -->|"clarification: missing business target or required scope"| Q["Ask a clarifying question; do not query"]
+    Q --> R["Display answer"]
 
     F -->|"general: greeting, casual chat, general knowledge"| G["Return conversational answer"]
     G --> R["Display answer"]
@@ -36,10 +42,15 @@ flowchart TD
     S --> D
 ```
 
-In short, **every message goes to the model first**. Only a message classified as
-an accessible business-data query reaches SQLite. General conversation is answered
-by the model directly, and the SQL tool enforces the active role's table
-permissions, read-only access, query timeout, and result limit.
+Only a message classified as an accessible business-data query reaches SQLite.
+The agent catches common “recent” requests that lack a business target or time
+range before calling the model, and asks a focused question without running SQL;
+for example, “查一下最近的” requires both a business target and a time range.
+Other unclear requests are handled by the model's clarification intent. The agent
+retains an unanswered clarification in the current chat so the user's next message
+can complete it; a new independent request is handled separately. General
+conversation is answered by the model directly, and the SQL tool enforces the
+active role's table permissions, read-only access, query timeout, and result limit.
 
 ## Requirements
 
