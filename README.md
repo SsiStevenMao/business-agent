@@ -1,21 +1,20 @@
 # Business Agent
 
-A local natural-language agent using `qwen3.5:2b` with thinking enabled. The model
-first classifies each input: business-data requests generate a read-only SQLite
-query that is checked against role permissions; greetings and other general
-questions receive a direct conversational answer without querying the database.
-SQL query results are formatted directly to avoid inventing data. The model may
-use up to 4,096 tokens for reasoning and output, so complex requests may take
-longer.
+A natural-language business agent with interchangeable language-model
+providers. The default provider is Groq via its OpenAI-compatible API; Ollama
+with `qwen3.5:2b` is also available. Both providers use the same intent-routing
+interface: the model answers general questions directly or proposes a
+read-only SQL query for accessible business data. Python enforces SQLite role
+permissions and formats query results.
 
 ## Workflow
 
 ```mermaid
 flowchart TD
-    A["Start agent"] --> B["Load settings and active role"]
+    A["Start agent"] --> B["Load provider, model, key, and active role"]
     B --> C["Initialize SQLite database and seed data if empty"]
     C --> D["User enters a message"]
-    D --> E["Qwen3.5:2b with thinking enabled"]
+    D --> E["Selected model provider"]
     E --> F{"Classify intent"}
 
     F -->|"general: greeting, casual chat, general knowledge"| G["Return conversational answer"]
@@ -45,7 +44,8 @@ permissions, read-only access, query timeout, and result limit.
 ## Requirements
 
 - Python 3.10+
-- Ollama running locally with `qwen3.5:2b` available
+- A Groq API key for the default provider, or Ollama with
+  `qwen3.5:2b` installed for local inference.
 
 ## Setup (Windows PowerShell)
 
@@ -57,10 +57,33 @@ python -m pip install -e .
 Copy-Item .env.example .env
 ```
 
-The default `.env` values use `http://localhost:11434`, model `qwen3.5:2b`, and
-`data/business.db`. The first run creates the database and seeds 50 customers,
-100 products, 1,000 orders, and their order-line items. Existing orders are not
-re-seeded. Override settings with environment variables or `.env`.
+Open `.env` locally and replace the `GROQ_API_KEY` placeholder with your Groq
+API key. Never paste the key into source code, commit it, or send it in chat.
+`.env` is excluded by `.gitignore`.
+
+Default model settings are `MODEL_PROVIDER=groq` and
+`GROQ_MODEL=openai/gpt-oss-20b`. Other Groq model IDs include
+`openai/gpt-oss-120b` and `qwen/qwen3.8-27b`; availability and usage limits
+depend on your Groq account. To switch back to local Ollama, set
+`MODEL_PROVIDER=ollama` and configure `OLLAMA_HOST` and `OLLAMA_MODEL`. Both
+implementations are behind the same `LanguageModel` interface in
+`business_agent/llm.py`, so the agent and database logic do not need
+provider-specific changes.
+See the [Groq OpenAI-compatible API guide](https://console.groq.com/docs/openai)
+and [model list](https://console.groq.com/docs/models) for current endpoint and
+model details.
+The CLI displays end-to-end response time for each question. Run the same
+questions with each provider to compare; Groq timing includes internet latency,
+and API usage is subject to Groq account limits and any applicable pricing.
+
+Because an API key was previously pasted into chat, revoke that key in the Groq
+console and create a replacement. Enter the replacement only in your local,
+git-ignored `.env`.
+
+The default database path is `data/business.db`. On first run, the app creates
+the database and seeds 50 customers, 100 products, 1,000 orders, and their
+order-line items. Existing orders are not re-seeded. Override settings with
+environment variables or `.env`.
 
 ## Run
 
@@ -68,10 +91,9 @@ re-seeded. Override settings with environment variables or `.env`.
 python -m business_agent
 ```
 
-Make sure the Ollama service is running before starting the agent. The model
-`qwen3.5:2b` is already installed on this computer, so no download is needed.
-`ollama pull qwen3.5:2b` is only needed once if it is not installed; `ollama
-serve` is only needed if the Ollama service is not already running.
+When using the Groq provider, the computer needs internet access and the API
+account's model limits and pricing apply. When using Ollama, make sure its
+service is running and the configured model is already installed.
 
 Choose a least-privilege role with `--role`:
 
@@ -91,7 +113,9 @@ Roles:
 
 Every role is read-only. SQLite authorizer checks table access as queries execute,
 and results are capped at 100 rows. The model receives the permitted schema and
-relationship descriptions with every question. Type `exit` to leave the chat.
+relationship descriptions with every question. The CLI reports elapsed time for
+each request, which can be used to compare providers. Type `exit` to leave the
+chat.
 
 ## Tests
 

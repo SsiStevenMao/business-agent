@@ -3,12 +3,12 @@ from pathlib import Path
 from typing import Any
 
 from business_agent.database import execute_read_query, schema_description
-from business_agent.llm import OllamaAgentError, OllamaModel
+from business_agent.llm import LanguageModel, ModelProviderError
 from business_agent.roles import Role
 
 
 class BusinessAgent:
-    def __init__(self, database_path: Path, model: OllamaModel, role: Role) -> None:
+    def __init__(self, database_path: Path, model: LanguageModel, role: Role) -> None:
         self.database_path = database_path
         self.model = model
         self.role = role
@@ -19,7 +19,7 @@ class BusinessAgent:
         on_progress: Callable[[str], None] | None = None,
     ) -> tuple[str, str]:
         if on_progress is not None:
-            on_progress("模型思考模式已开启，正在判断问题类型...")
+            on_progress("模型正在判断问题类型...")
         prompt = (
             "你是一个业务数据助手。先理解用户意图，再按要求返回 JSON：\n"
             "- business_query：用户询问当前业务数据库中实际存在、且当前角色有权访问的"
@@ -45,14 +45,14 @@ class BusinessAgent:
         if plan["intent"] == "general":
             answer = plan["answer"].strip()
             if not answer:
-                raise OllamaAgentError(
+                raise ModelProviderError(
                     "Ollama classified the request as general but returned no answer."
                 )
             return "", answer
 
         sql = plan["sql"].strip()
         if not sql:
-            raise OllamaAgentError(
+            raise ModelProviderError(
                 "Ollama classified the request as a business query but returned no SQL."
             )
         rows = execute_read_query(

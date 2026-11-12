@@ -1,13 +1,14 @@
 import argparse
 from functools import partial
+import sys
+import time
 
 from business_agent.agent import BusinessAgent
 from business_agent.config import load_settings
 from business_agent.database import QueryError, initialize_database
-from business_agent.llm import OllamaAgentError, OllamaModel
+from business_agent.llm import ModelProviderError, create_model
 from business_agent.roles import ROLES
 from business_agent.seed import seed_database
-from ollama import RequestError, ResponseError
 
 
 def main() -> int:
@@ -24,14 +25,20 @@ def main() -> int:
     initialize_database(settings.database_path)
     seed_database(settings.database_path)
     role = ROLES[args.role]
+    try:
+        model = create_model(settings)
+    except ModelProviderError as error:
+        print(f"Configuration error: {error}", file=sys.stderr)
+        return 2
     agent = BusinessAgent(
         settings.database_path,
-        OllamaModel(settings.ollama_host, settings.ollama_model),
+        model,
         role,
     )
 
     print(
-        f"Business Agent | role: {role.name} | model: {settings.ollama_model}\n"
+        f"Business Agent | role: {role.name} | "
+        f"model: {settings.groq_model if settings.model_provider == 'groq' else settings.ollama_model}\n"
         "Ask about orders, customers, or products. Type 'exit' to quit."
     )
     while True:
@@ -45,14 +52,16 @@ def main() -> int:
         if not question:
             continue
         try:
+            started_at = time.perf_counter()
             sql, answer = agent.answer(
                 question,
                 on_progress=partial(print, end="\n", flush=True),
             )
-        except (OllamaAgentError, QueryError, RequestError, ResponseError) as error:
+            elapsed = time.perf_counter() - started_at
+        except (ModelProviderError, QueryError) as error:
             print(f"Agent error: {error}")
             continue
-        print(f"\nAgent> {answer}")
+        print(f"\nAgent> {answer}\n耗时: {elapsed:.2f} 秒")
         if sql:
             print(f"SQL> {sql}")
 
