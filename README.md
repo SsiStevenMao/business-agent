@@ -29,7 +29,7 @@ flowchart TD
     J -->|"No"| K["Return query or permission error"]
     K --> R
     J -->|"Yes"| L["Execute SELECT against SQLite"]
-    L --> M["Format up to 100 result rows"]
+    L --> M["Format results up to the active role's row cap"]
     M --> S["Display answer and generated SQL"]
 
     R --> D
@@ -129,3 +129,20 @@ which can be used to compare providers. Type `exit` to leave the chat.
 ```powershell
 python -m unittest discover -s tests -v
 ```
+
+## Golden-question evaluation
+
+`evaluation/golden_questions.json` contains fixed natural-language questions,
+the expected intent, and a golden SQL answer for business questions. The
+expected answer values are checked against the seeded data in the unit tests.
+To evaluate the configured model's intent routing and generated SQL against
+those answers, run:
+
+```powershell
+python -m business_agent.evaluate
+```
+
+The evaluation creates a temporary database with the standard 50 customers,
+100 products, and 1,000 orders, then removes it when finished. It uses the
+provider and model configured in `.env`, so questions are sent to that model
+and may incur API usage. It does not read or modify `data/business.db`.

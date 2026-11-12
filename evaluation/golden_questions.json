@@ -1,0 +1,91 @@
+[
+  {
+    "id": "all-orders",
+    "question": "给我返回所有订单",
+    "role": "admin",
+    "expected_intent": "business_query",
+    "expected_sql": "SELECT * FROM orders ORDER BY id",
+    "expected_row_count": 1000
+  },
+  {
+    "id": "customer-count",
+    "question": "一共有多少个客户？",
+    "role": "sales_analyst",
+    "expected_intent": "business_query",
+    "expected_sql": "SELECT COUNT(*) AS customer_count FROM customers",
+    "expected_rows": [[50]]
+  },
+  {
+    "id": "product-count",
+    "question": "产品目录里一共有多少种产品？",
+    "role": "inventory_manager",
+    "expected_intent": "business_query",
+    "expected_sql": "SELECT COUNT(*) AS product_count FROM products",
+    "expected_rows": [[100]]
+  },
+  {
+    "id": "customer-lookup",
+    "question": "客户 CUST-0001 的名字和邮箱是什么？",
+    "role": "customer_support",
+    "expected_intent": "business_query",
+    "expected_sql": "SELECT first_name, last_name, email FROM customers WHERE customer_code = 'CUST-0001'",
+    "expected_rows": [["Alex", "Adams", "alex.adams.1@example.com"]]
+  },
+  {
+    "id": "customer-order-count",
+    "question": "客户 CUST-0001 下了多少个订单？",
+    "role": "customer_support",
+    "expected_intent": "business_query",
+    "expected_sql": "SELECT COUNT(*) AS order_count FROM orders WHERE customer_id = (SELECT id FROM customers WHERE customer_code = 'CUST-0001')",
+    "expected_rows": [[22]]
+  },
+  {
+    "id": "specific-order",
+    "question": "订单 ORD-000001 的状态、付款状态、城市和总金额是什么？",
+    "role": "customer_support",
+    "expected_intent": "business_query",
+    "expected_sql": "SELECT order_number, status, payment_status, shipping_city, total_amount FROM orders WHERE order_number = 'ORD-000001'",
+    "expected_rows": [["ORD-000001", "pending", "pending", "Austin", 2411.92]]
+  },
+  {
+    "id": "order-status-breakdown",
+    "question": "按订单状态统计订单数量",
+    "role": "sales_analyst",
+    "expected_intent": "business_query",
+    "expected_sql": "SELECT status, COUNT(*) AS order_count FROM orders GROUP BY status ORDER BY status",
+    "expected_rows": [
+      ["cancelled", 148],
+      ["delivered", 160],
+      ["pending", 162],
+      ["processing", 173],
+      ["returned", 177],
+      ["shipped", 180]
+    ]
+  },
+  {
+    "id": "active-product-count",
+    "question": "当前有多少个在售产品？",
+    "role": "inventory_manager",
+    "expected_intent": "business_query",
+    "expected_sql": "SELECT COUNT(*) AS product_count FROM products WHERE status = 'active'",
+    "expected_rows": [[94]]
+  },
+  {
+    "id": "lowest-stock-products",
+    "question": "库存最低的三个产品是什么？",
+    "role": "inventory_manager",
+    "expected_intent": "business_query",
+    "expected_sql": "SELECT sku, name, stock_quantity FROM products ORDER BY stock_quantity, id LIMIT 3",
+    "expected_rows": [
+      ["SKU-0010", "Laptop Sleeve", 0],
+      ["SKU-0078", "Office Chair 8", 0],
+      ["SKU-0055", "Desk Lamp 6", 2]
+    ]
+  },
+  {
+    "id": "greeting",
+    "question": "你好",
+    "role": "sales_analyst",
+    "expected_intent": "general"
+  }
+]
