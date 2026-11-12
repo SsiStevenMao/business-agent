@@ -108,6 +108,18 @@ environment variables or `.env`.
 python -m business_agent
 ```
 
+Launch the bilingual web interface in your browser:
+
+```powershell
+python -m business_agent.web
+```
+
+Then open `http://127.0.0.1:8000`. The local-only interface supports English and
+Chinese, role selection, follow-up conversations, decision summaries, SQL
+inspection/copying, and clearing the current role's conversation memory. Change
+the port with `python -m business_agent.web --port 8080`. The server binds to
+`127.0.0.1` and is not exposed to the network.
+
 To display a concise decision trace for every request (selected route and
 whether the database tool is called), run:
 
